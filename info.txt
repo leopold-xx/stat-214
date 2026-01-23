@@ -1,0 +1,5 @@
+name = "Sixian Liu"
+SID = "3041881092"
+email = "sixian_liu@berkeley.edu"
+github_name = "leopold-xx"
+
