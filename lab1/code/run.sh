@@ -80,11 +80,12 @@ echo "[run] running clean.py -> ${CLEANED_CSV}"
 python - <<PY
 import sys
 from pathlib import Path
-from clean import clean_data
 
 ROOT = Path(r"${ROOT_DIR}")
 CODE = ROOT / "code"
 sys.path.insert(0, str(CODE))
+
+from clean import clean_data
 
 raw_csv = Path(r"${RAW_CSV}")
 out_csv = Path(r"${CLEANED_CSV}")
