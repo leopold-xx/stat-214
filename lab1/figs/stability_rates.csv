@@ -1,0 +1,7 @@
+model,setting,ct_recommend_rate
+PECARN CDR,Original,0.7307027196981607
+PECARN CDR,Perturbed,0.7583713252633234
+Logistic,Original,0.9457632447728345
+Logistic,Perturbed,0.9352303096997328
+Boosting (calibrated),Original,0.9685584027668606
+Boosting (calibrated),Perturbed,0.961562647382487
