@@ -1,11 +1,9 @@
 # figures.py
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Dict, Any
 
-import os
 import numpy as np
 import pandas as pd
 

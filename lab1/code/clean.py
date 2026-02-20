@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Iterable, Sequence, Optional, Callable, Any
 
 import pandas as pd
-import numpy as np
 
 
 # =========================================================
@@ -846,7 +845,8 @@ def step07_parent_child_consistency(
 
     # ---------- Seizure: parent bool -> timing/duration
     if "post_traumatic_seizure__b" in df.columns:
-        parent_no_or_na = (df["post_traumatic_seizure__b"] != True) | df["post_traumatic_seizure__b"].isna()
+        # 原来：parent_no_or_na = (df["post_traumatic_seizure__b"] != True) | df["post_traumatic_seizure__b"].isna()
+        parent_no_or_na = ~df["post_traumatic_seizure__b"].fillna(False)
         for col in ["seizure_timing", "seizure_duration"]:
             if col in df.columns:
                 df = _pc_rule_only_setna_when_parent_no_or_na(
@@ -858,25 +858,9 @@ def step07_parent_child_consistency(
                     set_na=set_na,
                 )
 
-    # ---------- Headache: headache_at_ed_eval -> severity/onset
-    if "headache_at_ed_eval" in df.columns:
-        ha = _coerce_int(df, "headache_at_ed_eval")
-        df["headache_at_ed_eval"] = ha
-        parent_no_or_na = (ha != 1) | ha.isna()
-        for col in ["headache_severity", "headache_onset_time"]:
-            if col in df.columns:
-                df = _pc_rule_only_setna_when_parent_no_or_na(
-                    df, tr=tr,
-                    parent_no_or_na=parent_no_or_na,
-                    child_cols=[col],
-                    warn_name=f"{col} filled but headache_at_ed_eval!=Yes (set NA)",
-                    do_print=do_print,
-                    set_na=set_na,
-                )
-
     # ---------- Vomiting: parent bool -> detail fields
     if "vomiting_anytime_after_injury__b" in df.columns:
-        parent_no_or_na = (df["vomiting_anytime_after_injury__b"] != True) | df["vomiting_anytime_after_injury__b"].isna()
+        parent_no_or_na = ~df["vomiting_anytime_after_injury__b"].fillna(False)
         for col in ["vomiting_episode_count", "vomiting_onset_time", "vomiting_last_episode_time_before_ed"]:
             if col in df.columns:
                 df = _pc_rule_only_setna_when_parent_no_or_na(
@@ -888,41 +872,9 @@ def step07_parent_child_consistency(
                     set_na=set_na,
                 )
 
-    # ---------- AMS: altered_mental_status -> ams_*
-    if "altered_mental_status" in df.columns:
-        df["altered_mental_status"] = _coerce_int(df, "altered_mental_status")
-        ams = df["altered_mental_status"]
-        parent_no_or_na = (ams != 1) | ams.isna()
-        child_cols = [c for c in ["ams_agitated", "ams_sleepy", "ams_slow_to_respond", "ams_repetitive_questions", "ams_other"] if c in df.columns]
-        if child_cols:
-            df = coerce_int_cols(df, child_cols)
-            df = _pc_rule_only_setna_when_parent_no_or_na(
-                df, tr=tr,
-                parent_no_or_na=parent_no_or_na,
-                child_cols=child_cols,
-                warn_name="AMS parent!=Yes but ams_* filled (set NA)",
-                do_print=do_print,
-                set_na=set_na,
-            )
-
-    # ---------- Palpable skull fracture: parent -> depressed
-    if "palpable_skull_fracture" in df.columns and "palpable_skull_fracture_depressed" in df.columns:
-        psf = _coerce_int(df, "palpable_skull_fracture")
-        df["palpable_skull_fracture"] = psf
-        parent_no_or_na = (psf != 1) | psf.isna()  # 0/2/NA 视为非Yes
-        df["palpable_skull_fracture_depressed"] = _coerce_int(df, "palpable_skull_fracture_depressed")
-        df = _pc_rule_only_setna_when_parent_no_or_na(
-            df, tr=tr,
-            parent_no_or_na=parent_no_or_na,
-            child_cols=["palpable_skull_fracture_depressed"],
-            warn_name="PSF parent!=Yes but depressed filled (set NA)",
-            do_print=do_print,
-            set_na=set_na,
-        )
-
     # ---------- Scalp hematoma: parent bool -> location/size
     if "scalp_hematoma_or_swelling__b" in df.columns:
-        parent_no_or_na = (df["scalp_hematoma_or_swelling__b"] != True) | df["scalp_hematoma_or_swelling__b"].isna()
+        parent_no_or_na = ~df["scalp_hematoma_or_swelling__b"].fillna(False)
         for col in ["scalp_hematoma_location", "scalp_hematoma_size"]:
             if col in df.columns:
                 df = _pc_rule_only_setna_when_parent_no_or_na(
@@ -934,33 +886,9 @@ def step07_parent_child_consistency(
                     set_na=set_na,
                 )
 
-    # ---------- Basilar signs: parent 0/1 -> children
-    if "basilar_skull_fracture_signs" in df.columns:
-        b = _coerce_int(df, "basilar_skull_fracture_signs")
-        df["basilar_skull_fracture_signs"] = b
-        parent_no_or_na = (b != 1) | b.isna()
-        child_cols = [
-            "basilar_hemotympanum",
-            "basilar_csf_otorrhea",
-            "basilar_raccoon_eyes",
-            "basilar_battles_sign",
-            "basilar_csf_rhinorrhea",
-        ]
-        present_children = [c for c in child_cols if c in df.columns]
-        if present_children:
-            df = coerce_int_cols(df, present_children)
-            df = _pc_rule_only_setna_when_parent_no_or_na(
-                df, tr=tr,
-                parent_no_or_na=parent_no_or_na,
-                child_cols=present_children,
-                warn_name="Basilar parent!=Yes but basilar_* filled (set NA)",
-                do_print=do_print,
-                set_na=set_na,
-            )
-
     # ---------- Trauma above clavicles: parent bool -> region fields
     if "trauma_above_clavicles_any__b" in df.columns:
-        parent_no_or_na = (df["trauma_above_clavicles_any__b"] != True) | df["trauma_above_clavicles_any__b"].isna()
+        parent_no_or_na = ~df["trauma_above_clavicles_any__b"].fillna(False)
         region_cols = [
             c for c in df.columns
             if c.startswith("trauma_above_clavicles_")
@@ -979,7 +907,7 @@ def step07_parent_child_consistency(
 
     # ---------- Neuro deficit: parent bool -> sub fields
     if "neuro_deficit_non_mental_status__b" in df.columns:
-        parent_no_or_na = (df["neuro_deficit_non_mental_status__b"] != True) | df["neuro_deficit_non_mental_status__b"].isna()
+        parent_no_or_na = ~df["neuro_deficit_non_mental_status__b"].fillna(False)
         sub_cols = [
             c for c in df.columns
             if c.startswith("neuro_deficit_")
@@ -998,7 +926,7 @@ def step07_parent_child_consistency(
 
     # ---------- OSI: parent bool -> osi_*
     if "other_substantial_injury_non_head__b" in df.columns:
-        parent_no_or_na = (df["other_substantial_injury_non_head__b"] != True) | df["other_substantial_injury_non_head__b"].isna()
+        parent_no_or_na = ~df["other_substantial_injury_non_head__b"].fillna(False)
         osi_cols = [c for c in df.columns if c.startswith("osi_") and not c.endswith("__b")]
         if osi_cols:
             df = _pc_rule_only_setna_when_parent_no_or_na(
@@ -1010,17 +938,9 @@ def step07_parent_child_consistency(
                 set_na=set_na,
             )
 
-    # ---------------- CT consistency (planned/done/sedation reasons) ----------------
-
-    if "imaging_planned_on_form__b" not in df.columns and "imaging_planned_on_form" in df.columns:
-        df["imaging_planned_on_form__b"] = _yn_to_bool(_coerce_int(df, "imaging_planned_on_form"))
-
-    if "head_ct_done_anywhere__b" not in df.columns and "head_ct_done_anywhere" in df.columns:
-        df["head_ct_done_anywhere__b"] = _yn_to_bool(_coerce_int(df, "head_ct_done_anywhere"))
-
-    # CT planned -> ct_indication_*
+    # CT planned -> ct_indication_* and ct_sedation
     if "imaging_planned_on_form__b" in df.columns:
-        parent_no_or_na = (df["imaging_planned_on_form__b"] != True) | df["imaging_planned_on_form__b"].isna()
+        parent_no_or_na = ~df["imaging_planned_on_form__b"].fillna(False)
 
         ind_cols = [c for c in df.columns if c.startswith("ct_indication_") and not c.endswith("__b")]
         if ind_cols:
@@ -1034,7 +954,6 @@ def step07_parent_child_consistency(
                 set_na=set_na,
             )
 
-        # CT planned -> ct_sedation 
         sed_cols = [c for c in df.columns if c == "ct_sedation"]
         if sed_cols:
             df = coerce_int_cols(df, sed_cols)
@@ -1049,7 +968,7 @@ def step07_parent_child_consistency(
 
     # CT done anywhere -> tbi_on_ct + ct_finding_*
     if "head_ct_done_anywhere__b" in df.columns:
-        parent_no_or_na = (df["head_ct_done_anywhere__b"] != True) | df["head_ct_done_anywhere__b"].isna()
+        parent_no_or_na = ~df["head_ct_done_anywhere__b"].fillna(False)
 
         if "tbi_on_ct" in df.columns:
             df["tbi_on_ct"] = _coerce_int(df, "tbi_on_ct")
@@ -1298,6 +1217,6 @@ if __name__ == "__main__":
                 "08": True,
                 },
     )
-    df_analysis = df_clean[df_clean.get("analysis_eligible", True) == True].copy()
+    df_analysis = df_clean[df_clean["analysis_eligible"].fillna(False)].copy()
 
     print(f"\n[FINAL] df_clean rows={len(df_clean)} | df_analysis rows={len(df_analysis)}")

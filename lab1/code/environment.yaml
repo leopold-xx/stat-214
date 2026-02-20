@@ -18,3 +18,4 @@ dependencies:
       - nbclient
       - ipykernel
       - notebook
+      - ruff

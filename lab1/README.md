@@ -4,7 +4,7 @@ This repository contains a fully reproducible pipeline to:
 
 1) read the raw dataset from `data/`  
 2) clean the data (`code/clean.py`)  
-3) train/evaluate models (`code/model.py`)  
+3) train/evaluate models (`code/models.py`)  
 4) generate figures (`code/figures.py`)  
 5) (optional) render the report notebook to PDF via Quarto (`report/lab1.ipynb → report/lab1.pdf`)
 
@@ -17,7 +17,7 @@ lab1/
   code/
     run.sh
     clean.py
-    model.py
+    models.py
     figures.py
     environment.yaml
   data/
@@ -151,7 +151,7 @@ Open `clean.py` and search for `"02"`, `"07"`, `"08"` (or the step labels in com
 ### Cleaned data
 - `data/cleaned_data.csv`
 
-### Model artifacts (written by `model.py`)
+### Model artifacts (written by `models.py`)
 - `model_output/model_outputs.npz`  (required for figures)
 - plus other artifacts like:
   - `perm_importance.csv`

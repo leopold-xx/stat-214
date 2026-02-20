@@ -104,14 +104,14 @@ PY
 # ------------------------------------------------------------
 # 3) Run model.py -> model_output/
 # ------------------------------------------------------------
-echo "[run] running model.py -> ${MODEL_OUT_DIR}"
-python "${CODE_DIR}/model.py" \
+echo "[run] running models.py -> ${MODEL_OUT_DIR}"
+python "${CODE_DIR}/models.py" \
   --clean_csv "${CLEANED_CSV}" \
   --out_dir "${MODEL_OUT_DIR}"
 
 if [[ ! -f "${MODEL_OUT_DIR}/model_outputs.npz" ]]; then
   echo "[ERROR] model_outputs.npz not found in ${MODEL_OUT_DIR}"
-  echo "        model.py likely failed or wrote to a different filename."
+  echo "        models.py likely failed or wrote to a different filename."
   conda deactivate
   exit 1
 fi
