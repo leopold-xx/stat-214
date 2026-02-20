@@ -563,17 +563,23 @@ def make_figf1(clean_csv: Path, out_dir: Path) -> Path:
     res = _fit_glm(X)
     p = res.predict(X)
 
+    # -----------------------------
     # Left: calibration by deciles
+    # -----------------------------
     cal = pd.DataFrame({"p": p, "y": X["y"].astype(int)})
 
-    # NOTE: your original used qcut(cal["p"], 10). This can break on ties.
-    # Keep your original behavior; if it errors, switch to rank(method="first").
-    cal["decile"] = pd.qcut(cal["p"], 10, labels=[f"D{i}" for i in range(1, 11)])
+    labels = [f"D{i}" for i in range(1, 11)]
+    # robust deciles: break ties deterministically
+    cal["decile"] = pd.qcut(cal["p"].rank(method="first"), 10, labels=labels)
 
     tabA = (
         cal.groupby("decile", observed=False)
-           .agg(n=("y", "count"), k=("y", "sum"),
-                obs_rate=("y", "mean"), pred_mean=("p", "mean"))
+           .agg(
+               n=("y", "count"),
+               k=("y", "sum"),
+               obs_rate=("y", "mean"),
+               pred_mean=("p", "mean"),
+           )
            .reset_index()
     )
     _, lo, hi = _wilson_ci(tabA["k"], tabA["n"], z=1.96)
@@ -581,52 +587,81 @@ def make_figf1(clean_csv: Path, out_dir: Path) -> Path:
     tabA["hi"] = hi
     tabA["decile_str"] = tabA["decile"].astype(str)
 
+    # axis ranges (expand x/y a bit more than before)
     xmin = float(tabA["pred_mean"].min())
     xmax = float(tabA["pred_mean"].max())
     ymin = float(min(tabA["obs_rate"].min(), tabA["lo"].min()))
     ymax = float(max(tabA["obs_rate"].max(), tabA["hi"].max()))
-    xpad = 0.05 * (xmax - xmin) if xmax > xmin else 0.01
-    ypad = 0.08 * (ymax - ymin) if ymax > ymin else 0.01
 
-    xline = np.linspace(max(0, xmin - xpad), min(1, xmax + xpad), 200)
+    # MORE padding than your old version
+    xpad = 0.10 * (xmax - xmin) if xmax > xmin else 0.015
+    ypad = 0.12 * (ymax - ymin) if ymax > ymin else 0.015
+
+    # Extra headroom so D10 label never clips
+    x_lo = max(0.0, xmin - xpad)
+    x_hi = min(1.0, xmax + xpad)
+    y_lo = max(0.0, ymin - ypad)
+    y_hi = min(1.0, ymax + ypad + 0.02)  # +2 percentage points headroom
+
+    xline = np.linspace(x_lo, x_hi, 200)
 
     traceA_points = go.Scatter(
-        x=tabA["pred_mean"], y=tabA["obs_rate"],
+        x=tabA["pred_mean"],
+        y=tabA["obs_rate"],
         mode="markers",
         marker=dict(size=10, opacity=0.55),
         error_y=dict(
             type="data",
-            array=(tabA["hi"]-tabA["obs_rate"]),
-            arrayminus=(tabA["obs_rate"]-tabA["lo"]),
+            array=(tabA["hi"] - tabA["obs_rate"]),
+            arrayminus=(tabA["obs_rate"] - tabA["lo"]),
             thickness=1.2,
-            width=0
+            width=0,
         ),
         customdata=np.c_[tabA["decile_str"], tabA["n"], tabA["k"]],
-        hovertemplate=("Decile: %{customdata[0]}<br>"
-                       "n: %{customdata[1]:,.0f}, k: %{customdata[2]:,.0f}<br>"
-                       "Pred mean: %{x:.3%}<br>"
-                       "Observed: %{y:.3%}<extra></extra>"),
-        showlegend=False
+        hovertemplate=(
+            "Decile: %{customdata[0]}<br>"
+            "n: %{customdata[1]:,.0f}, k: %{customdata[2]:,.0f}<br>"
+            "Pred mean: %{x:.3%}<br>"
+            "Observed: %{y:.3%}<extra></extra>"
+        ),
+        showlegend=False,
+        cliponaxis=False,
     )
 
-    traceA_line = go.Scatter(x=xline, y=xline, mode="lines", opacity=0.25, line=dict(width=2), showlegend=False)
+    traceA_line = go.Scatter(
+        x=xline,
+        y=xline,
+        mode="lines",
+        opacity=0.25,
+        line=dict(width=2),
+        showlegend=False,
+        hoverinfo="skip",
+    )
 
+    # label top deciles (avoid manual dx/dy)
     label_keep = {"D8", "D9", "D10"}
-    lab = tabA.loc[tabA["decile_str"].isin(label_keep)].copy().reset_index(drop=True)
-    dxs = np.array([+0.006, +0.006, +0.006])
-    dys = np.array([+0.004, +0.001, -0.002])
+    lab = tabA.loc[tabA["decile_str"].isin(label_keep)].copy()
+
     traceA_labels = go.Scatter(
-        x=lab["pred_mean"] + dxs[:len(lab)],
-        y=lab["obs_rate"] + dys[:len(lab)],
+        x=lab["pred_mean"],
+        y=lab["obs_rate"],
         mode="text",
         text=lab["decile_str"],
+        textposition="top right",
         textfont=dict(size=13),
         hoverinfo="skip",
-        showlegend=False
+        showlegend=False,
+        cliponaxis=False,  # key: do not clip labels
     )
 
+    # -----------------------------
     # Right: risk concentration
-    pred = pd.DataFrame({"p": p, "y": X["y"].astype(int)}).sort_values("p", ascending=False).reset_index(drop=True)
+    # -----------------------------
+    pred = (
+        pd.DataFrame({"p": p, "y": X["y"].astype(int)})
+        .sort_values("p", ascending=False)
+        .reset_index(drop=True)
+    )
     N = len(pred)
     K = int(pred["y"].sum())
     baseline = (K / N) if N > 0 else np.nan
@@ -635,7 +670,7 @@ def make_figf1(clean_csv: Path, out_dir: Path) -> Path:
     rows = []
     for f in fracs:
         m = max(1, int(round(f * N)))
-        captured = int(pred.loc[:m-1, "y"].sum())
+        captured = int(pred.loc[: m - 1, "y"].sum())
         capture_rate = (captured / K) if K > 0 else np.nan
         top_rate = captured / m
         lift = (top_rate / baseline) if baseline > 0 else np.nan
@@ -648,53 +683,62 @@ def make_figf1(clean_csv: Path, out_dir: Path) -> Path:
     lift_pad = 0.10 * (lift_max - lift_min) if lift_max > lift_min else 0.10
 
     traceB_capture = go.Scatter(
-        x=tabB["top_frac"], y=tabB["capture"],
+        x=tabB["top_frac"],
+        y=tabB["capture"],
         mode="lines+markers+text",
-        text=[f"{int(f*100)}%" for f in tabB["top_frac"]],
+        text=[f"{int(f * 100)}%" for f in tabB["top_frac"]],
         textposition="top center",
         textfont=dict(size=12),
         name="Capture",
         opacity=0.9,
         hovertemplate="Top frac: %{x:.0%}<br>Capture: %{y:.1%}<extra></extra>",
-        showlegend=True
+        showlegend=True,
     )
 
     traceB_lift = go.Scatter(
-        x=tabB["top_frac"], y=tabB["lift"],
+        x=tabB["top_frac"],
+        y=tabB["lift"],
         mode="lines+markers",
         name="Lift",
         opacity=0.9,
         hovertemplate="Top frac: %{x:.0%}<br>Lift: %{y:.2f}×<extra></extra>",
-        showlegend=True
+        showlegend=True,
     )
 
     combo = make_subplots(
-        rows=1, cols=2,
+        rows=1,
+        cols=2,
         column_widths=[0.52, 0.48],
         horizontal_spacing=0.14,
-        subplot_titles=("A. Calibration (deciles; Wilson 95% CI)", "B. Risk concentration (high-risk tail)"),
-        specs=[[{"type": "xy"}, {"type": "xy", "secondary_y": True}]]
+        subplot_titles=(
+            "A. Calibration (deciles; Wilson 95% CI)",
+            "B. Risk concentration (high-risk tail)",
+        ),
+        specs=[[{"type": "xy"}, {"type": "xy", "secondary_y": True}]],
     )
 
     combo.add_trace(traceA_points, row=1, col=1)
-    combo.add_trace(traceA_line,   row=1, col=1)
+    combo.add_trace(traceA_line, row=1, col=1)
     combo.add_trace(traceA_labels, row=1, col=1)
 
     combo.add_trace(traceB_capture, row=1, col=2, secondary_y=False)
-    combo.add_trace(traceB_lift,    row=1, col=2, secondary_y=True)
+    combo.add_trace(traceB_lift, row=1, col=2, secondary_y=True)
 
     combo.update_xaxes(
         title_text="Mean predicted risk (by decile)",
         tickformat=".2%",
-        range=[max(0, xmin - xpad), min(1, xmax + xpad)],
-        row=1, col=1
+        range=[x_lo, x_hi],
+        row=1,
+        col=1,
     )
     combo.update_yaxes(
         title_text="Observed ciTBI rate",
         tickformat=".2%",
-        range=[max(0, ymin - ypad), min(1, ymax + ypad)],
-        showgrid=True, gridcolor="rgba(0,0,0,0.06)",
-        row=1, col=1
+        range=[y_lo, y_hi],
+        showgrid=True,
+        gridcolor="rgba(0,0,0,0.06)",
+        row=1,
+        col=1,
     )
 
     combo.update_xaxes(title_text="Top fraction by predicted risk", tickformat=".0%", row=1, col=2)
@@ -702,13 +746,18 @@ def make_figf1(clean_csv: Path, out_dir: Path) -> Path:
         title_text="Capture",
         tickformat=".0%",
         range=[max(0, cap_min - cap_pad), min(1, cap_max + cap_pad)],
-        showgrid=True, gridcolor="rgba(0,0,0,0.06)",
-        row=1, col=2, secondary_y=False
+        showgrid=True,
+        gridcolor="rgba(0,0,0,0.06)",
+        row=1,
+        col=2,
+        secondary_y=False,
     )
     combo.update_yaxes(
         title_text="Lift (× baseline)",
         range=[max(0, lift_min - lift_pad), lift_max + lift_pad],
-        row=1, col=2, secondary_y=True
+        row=1,
+        col=2,
+        secondary_y=True,
     )
 
     combo.update_layout(
@@ -719,10 +768,12 @@ def make_figf1(clean_csv: Path, out_dir: Path) -> Path:
         font=dict(size=13),
         legend=dict(
             orientation="h",
-            x=0.985, xanchor="right",
-            y=0.985, yanchor="top",
-            bgcolor="rgba(255,255,255,0.75)"
-        )
+            x=0.985,
+            xanchor="right",
+            y=0.985,
+            yanchor="top",
+            bgcolor="rgba(255,255,255,0.75)",
+        ),
     )
     for ann in combo.layout.annotations:
         ann.font = dict(size=13)
@@ -904,20 +955,18 @@ def make_figf3(clean_csv: Path, out_dir: Path) -> Path:
     tab["y"] = pd.to_numeric(tab["y"], errors="coerce")
     tab = tab.dropna(subset=["y"])
 
-    # LEFT plot
+    # LEFT plot (no error bars)
     g = (
         tab.groupby(["hematoma", "acting_normal"], observed=False)["y"]
            .agg(n="count", k="sum")
            .reset_index()
     )
     g["rate"] = g["k"] / g["n"]
-    _, lo, hi = _wilson_ci(g["k"], g["n"], z=1.96)
-    g["lo"], g["hi"] = lo, hi
 
     hema_map = {False: "No\nhema", True: "Hema\npresent"}
-    act_map  = {True: "Acting\nnormal", False: "Not acting\nnormal"}
+    act_map = {True: "Acting\nnormal", False: "Not acting\nnormal"}
     g["hema_lab"] = g["hematoma"].map(hema_map)
-    g["act_lab"]  = g["acting_normal"].map(act_map)
+    g["act_lab"] = g["acting_normal"].map(act_map)
 
     x_order = ["No\nhema", "Hema\npresent"]
 
@@ -934,24 +983,38 @@ def make_figf3(clean_csv: Path, out_dir: Path) -> Path:
                 y=gg["rate"],
                 name=name,
                 text=(gg["rate"] * 100).round(2),
+                texttemplate="%{text:.2f}%",
                 textposition="outside",
                 cliponaxis=False,
                 opacity=0.9,
-                error_y=dict(type="data",
-                             array=(gg["hi"] - gg["rate"]),
-                             arrayminus=(gg["rate"] - gg["lo"])),
+                # ✅ remove error bars completely
+                error_y=None,
                 customdata=np.c_[gg["n"].to_numpy(), gg["k"].to_numpy()],
                 hovertemplate=("Hematoma: %{x}<br>"
                                f"{name}<br>"
                                "ciTBI rate: %{y:.2%}<br>"
                                "n=%{customdata[0]:,.0f}, k=%{customdata[1]:,.0f}<extra></extra>"),
                 offsetgroup=name,
+                # ✅ remove bar border lines so nothing covers the text
+                marker=dict(line=dict(width=0)),
             )
         )
 
-    # RIGHT plot: RD vs reference with bootstrap CI
+    # Color bars (still fine without borders)
+    color_act = {
+        "Acting\nnormal": "rgba(86, 180, 233, 0.85)",
+        "Not acting\nnormal": "rgba(230, 159, 0, 0.85)",
+    }
+    for tr in left_traces:
+        tr.marker = dict(
+            color=color_act.get(tr.name, "rgba(120,120,120,0.85)"),
+            line=dict(width=0),
+        )
+        tr.textfont = dict(size=12)
+
+    # RIGHT plot: RD vs reference with bootstrap CI (unchanged content)
     hema2 = np.where(tab["hematoma"].to_numpy(), "Hema", "NoHema")
-    act2  = np.where(tab["acting_normal"].to_numpy(), "Normal", "NotNormal")
+    act2 = np.where(tab["acting_normal"].to_numpy(), "Normal", "NotNormal")
     tab["group"] = pd.Series(hema2).astype(str).str.cat(pd.Series(act2).astype(str), sep=" × ")
 
     ref = "NoHema × Normal"
@@ -1023,15 +1086,6 @@ def make_figf3(clean_csv: Path, out_dir: Path) -> Path:
         hovertemplate="%{x}<br>RD vs ref: %{y:.2f} pp<extra></extra>",
     )
 
-    color_act = {
-        "Acting\nnormal": "rgba(86, 180, 233, 0.85)",
-        "Not acting\nnormal": "rgba(230, 159, 0, 0.85)",
-    }
-    for tr in left_traces:
-        tr.marker = dict(color=color_act.get(tr.name, "rgba(120,120,120,0.85)"),
-                         line=dict(width=0.8, color="rgba(0,0,0,0.25)"))
-        tr.textfont = dict(size=12)
-
     combo = make_subplots(
         rows=1, cols=2,
         column_widths=[0.52, 0.48],
@@ -1063,10 +1117,17 @@ def make_figf3(clean_csv: Path, out_dir: Path) -> Path:
         ticksuffix=" pp",
         showgrid=True, gridcolor="rgba(0,0,0,0.06)",
         zeroline=False,
-        range=[-(ymax_right*1.25 + 0.2), (ymax_right*1.25 + 0.2)],
+        range=[-(ymax_right * 1.25 + 0.2), (ymax_right * 1.25 + 0.2)],
         row=1, col=2
     )
-    combo.update_xaxes(title_text="", tickangle=0, automargin=True, row=1, col=2)
+
+    # ✅ rotate right-panel x labels to avoid overlap (only change on right panel)
+    combo.update_xaxes(
+        title_text="",
+        tickangle=-25,
+        automargin=True,
+        row=1, col=2
+    )
 
     combo.update_layout(
         template="plotly_white",
