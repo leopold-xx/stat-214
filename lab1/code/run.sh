@@ -138,21 +138,21 @@ python "${CODE_DIR}/figures.py" \
 # ------------------------------------------------------------
 # 6) Render report/lab1.ipynb -> report/lab1.pdf via Quarto
 # ------------------------------------------------------------
-if [[ -f "${REPORT_IPYNB}" ]]; then
-  if command -v quarto >/dev/null 2>&1; then
-    echo "[run] quarto render ${REPORT_IPYNB} -> ${REPORT_PDF}"
-    (cd "${REPORT_DIR}" && quarto render "lab1.ipynb" --to pdf)
-    if [[ -f "${REPORT_PDF}" ]]; then
-      echo "[run] report generated: ${REPORT_PDF}"
-    else
-      echo "[WARN] quarto finished but ${REPORT_PDF} not found (check quarto output)."
-    fi
-  else
-    echo "[WARN] quarto not found in PATH; skip rendering PDF."
-  fi
-else
-  echo "[WARN] ${REPORT_IPYNB} not found; skip rendering PDF."
-fi
+# if [[ -f "${REPORT_IPYNB}" ]]; then
+#   if command -v quarto >/dev/null 2>&1; then
+#     echo "[run] quarto render ${REPORT_IPYNB} -> ${REPORT_PDF}"
+#     (cd "${REPORT_DIR}" && quarto render "lab1.ipynb" --to pdf)
+#     if [[ -f "${REPORT_PDF}" ]]; then
+#       echo "[run] report generated: ${REPORT_PDF}"
+#     else
+#       echo "[WARN] quarto finished but ${REPORT_PDF} not found (check quarto output)."
+#     fi
+#   else
+#     echo "[WARN] quarto not found in PATH; skip rendering PDF."
+#   fi
+# else
+#   echo "[WARN] ${REPORT_IPYNB} not found; skip rendering PDF."
+# fi
 
 # ------------------------------------------------------------
 # 7) Deactivate conda env
