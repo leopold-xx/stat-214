@@ -4,7 +4,7 @@ set -euo pipefail
 # ------------------------------------------------------------
 # Layout:
 #   lab1/
-#     code/ (run.sh, clean.py, model.py, figures.py, environment.yaml)
+#     code/ (run.sh, clean.py, models.py, figures.py, environment.yaml)
 #     data/ (raw csv, cleaned_data.csv)
 #     model_output/
 #     figs/
