@@ -1,0 +1,17 @@
+name: stat214
+channels:
+  - defaults
+dependencies:
+  - python=3.14
+  - pip:
+    - numpy
+    - pandas
+    - matplotlib
+    - scikit-learn
+    - scipy
+    - jupyterlab
+    - seaborn
+    - ruff
+    -
+    
+  
