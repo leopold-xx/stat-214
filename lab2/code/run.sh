@@ -5,23 +5,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR"
 LAB2_DIR="$(cd "$CODE_DIR/.." && pwd)"
+FEATURE_ENG_DIR="$CODE_DIR/feature_engineering"
+FEATURE_ENG_CODE_DIR="$FEATURE_ENG_DIR/code"
+FEATURE_ENG_RESULTS_DIR="$FEATURE_ENG_DIR/results"
 ENV_YAML="$CODE_DIR/environment.yaml"
 ENV_NAME="env_214"
 DATA_DIR="$LAB2_DIR/data"
+FLOAT32_DIR="$LAB2_DIR/data"
 RESULTS_DIR="$CODE_DIR/results"
 
-echo "[INFO] CODE_DIR   = $CODE_DIR"
-echo "[INFO] LAB2_DIR   = $LAB2_DIR"
-echo "[INFO] ENV_YAML   = $ENV_YAML"
-echo "[INFO] DATA_DIR   = $DATA_DIR"
-echo "[INFO] RESULTS_DIR= $RESULTS_DIR"
+echo "[INFO] CODE_DIR    = $CODE_DIR"
+echo "[INFO] LAB2_DIR    = $LAB2_DIR"
+echo "[INFO] FEATURE_ENG_DIR = $FEATURE_ENG_DIR"
+echo "[INFO] ENV_YAML    = $ENV_YAML"
+echo "[INFO] DATA_DIR    = $DATA_DIR"
+echo "[INFO] FLOAT32_DIR = $FLOAT32_DIR"
+echo "[INFO] RESULTS_DIR = $RESULTS_DIR"
 
 cd "$CODE_DIR"
-
-
-
-
-
 
 # ========= conda init =========
 if ! command -v conda >/dev/null 2>&1; then
@@ -30,7 +31,6 @@ if ! command -v conda >/dev/null 2>&1; then
 fi
 
 CONDA_BASE="$(conda info --base)"
-
 source "$CONDA_BASE/etc/profile.d/conda.sh"
 
 echo "[INFO] Updating conda environment from $ENV_YAML ..."
@@ -44,165 +44,113 @@ python -V
 
 mkdir -p "$RESULTS_DIR"
 mkdir -p "$RESULTS_DIR/part3_random_forest"
-
-
-
-
-
+mkdir -p "$CODE_DIR/LDA_model/results/part3_lda"
+mkdir -p "$RESULTS_DIR/transfer_learning/comparisons"
+mkdir -p "$RESULTS_DIR/transfer_learning/results_baseline"
+mkdir -p "$RESULTS_DIR/transfer_learning/results_modified"
+mkdir -p "$RESULTS_DIR/part3_logistic_regression/results_baseline"
+mkdir -p "$RESULTS_DIR/part3_logistic_regression/results_modified"
+mkdir -p "$FLOAT32_DIR"
+mkdir -p "$FEATURE_ENG_RESULTS_DIR/feature_engineering_part21"
+mkdir -p "$FEATURE_ENG_RESULTS_DIR/feature_engineering_plots"
 
 # ========= convert npz float64 -> float32 =========
-echo "[INFO] Running float32 conversion on $DATA_DIR ..."
-python - <<'PY'
+echo "[INFO] Running float32 conversion from $DATA_DIR to $FLOAT32_DIR ..."
+python - <<PY
 import numpy as np
 from pathlib import Path
 
-src_dir = Path("../data")
-dst_dir = Path("../data")
+src_dir = Path("$DATA_DIR")
+dst_dir = Path("$FLOAT32_DIR")
 dst_dir.mkdir(parents=True, exist_ok=True)
 
 npz_files = sorted(src_dir.glob("*.npz"))
 
-if len(npz_files) == 0:
-    print("No npz files found in", src_dir)
-else:
-    all_mean_abs = []
-    all_max_abs = []
-    all_mean_rel = []
-
-    for f in npz_files:
-        data = np.load(f)
-
+for f in npz_files:
+    with np.load(f) as data:
         save_dict = {}
-        file_mean_abs_list = []
-        file_max_abs_list = []
-        file_mean_rel_list = []
-
         for key in data.files:
-            arr64 = data[key]
-
-            if np.issubdtype(arr64.dtype, np.floating):
-                arr32 = arr64.astype(np.float32)
-
-                abs_diff = np.abs(arr64 - arr32.astype(arr64.dtype))
-                mean_abs = float(abs_diff.mean())
-                max_abs = float(abs_diff.max())
-
-                rel_diff = abs_diff / (np.abs(arr64) + 1e-12)
-                mean_rel = float(rel_diff.mean())
-
-                file_mean_abs_list.append(mean_abs)
-                file_max_abs_list.append(max_abs)
-                file_mean_rel_list.append(mean_rel)
-
-                all_mean_abs.append(mean_abs)
-                all_max_abs.append(max_abs)
-                all_mean_rel.append(mean_rel)
-
-                save_dict[key] = arr32
+            arr = data[key]
+            if np.issubdtype(arr.dtype, np.floating):
+                save_dict[key] = arr.astype(np.float32)
             else:
-                save_dict[key] = arr64
-
-        out_path = dst_dir / f.name
-        np.savez_compressed(out_path, **save_dict)
-
-    if all_mean_abs:
-        print("\n=== Overall summary ===")
-        print(f"number of files: {len(npz_files)}")
-        print(f"overall mean(abs error): {np.mean(all_mean_abs):.10g}")
-        print(f"overall max(abs error):  {np.max(all_max_abs):.10g}")
-        print(f"overall mean(rel error): {np.mean(all_mean_rel):.10g}")
-    else:
-        print("\nNo floating-point arrays were found in these npz files.")
+                save_dict[key] = arr
+    out_path = dst_dir / f.name
+    np.savez_compressed(out_path, **save_dict)
+    print(f"[INFO] saved {out_path}")
 PY
 
+# ========= EDA =========
+echo "[INFO] Running EDA..."
+python eda.py
 
+# ========= Feature Engineering =========
+echo "[INFO] Running feature engineering summary..."
+python "$FEATURE_ENG_CODE_DIR/feature_engineering.py" \
+    --image_dir "$FLOAT32_DIR" \
+    --output_dir "$FEATURE_ENG_RESULTS_DIR/feature_engineering_part21"
 
+echo "[INFO] Running feature engineering plots..."
+python "$FEATURE_ENG_CODE_DIR/feature_engineering_plot.py" \
+    --image_dir "$FLOAT32_DIR" \
+    --output_dir "$FEATURE_ENG_RESULTS_DIR/feature_engineering_plots"
 
+# ========= Transfer Learning (baseline — parallel second chain for compare_transfer_results) =========
+echo "[INFO] Submitting transfer learning jobs (baseline)..."
 
+PRETRAIN_BASE_JOBID=$(sbatch job.sh transfer_learning/configs/pretrain_baseline.yaml | awk '{print $4}')
+echo "[INFO] pretrain (baseline) job id: $PRETRAIN_BASE_JOBID"
 
-# ========= transfer learning =========
-echo "[INFO] Submitting transfer learning jobs..."
+FINETUNE_CV_BASE_JOBID=$(sbatch --dependency=afterok:"$PRETRAIN_BASE_JOBID" job.sh transfer_learning/configs/finetune_cv_baseline.yaml | awk '{print $4}')
+echo "[INFO] finetune_cv (baseline) job id: $FINETUNE_CV_BASE_JOBID"
 
-PRETRAIN_JOBID=$(
-    sbatch job.sh configs/pretrain.yaml | awk '{print $4}'
+FINETUNE_FINAL_BASE_JOBID=$(sbatch --dependency=afterok:"$FINETUNE_CV_BASE_JOBID" job.sh transfer_learning/configs/finetune_final_baseline.yaml | awk '{print $4}')
+echo "[INFO] finetune_final (baseline) job id: $FINETUNE_FINAL_BASE_JOBID"
+
+# ========= Transfer Learning (modified — same chain as before, configs under transfer_learning/configs) =========
+echo "[INFO] Submitting transfer learning jobs (modified)..."
+
+PRETRAIN_MOD_JOBID=$(sbatch job.sh transfer_learning/configs/pretrain.yaml | awk '{print $4}')
+echo "[INFO] pretrain (modified) job id: $PRETRAIN_MOD_JOBID"
+
+FINETUNE_CV_MOD_JOBID=$(sbatch --dependency=afterok:"$PRETRAIN_MOD_JOBID" job.sh transfer_learning/configs/finetune_cv.yaml | awk '{print $4}')
+echo "[INFO] finetune_cv (modified) job id: $FINETUNE_CV_MOD_JOBID"
+
+FINETUNE_FINAL_MOD_JOBID=$(sbatch --dependency=afterok:"$FINETUNE_CV_MOD_JOBID" job.sh transfer_learning/configs/finetune_final.yaml | awk '{print $4}')
+echo "[INFO] finetune_final (modified) job id: $FINETUNE_FINAL_MOD_JOBID"
+
+# ========= Post TL (embeddings + TL analysis; after both finetune_final jobs) =========
+echo "[INFO] Submitting Part 3 post-TL job (get_embedding, probes, viz, compare_transfer)..."
+PART3_POST_TL_JOBID=$(
+    sbatch --dependency=afterok:"$FINETUNE_FINAL_MOD_JOBID:$FINETUNE_FINAL_BASE_JOBID" \
+        "$CODE_DIR/transfer_learning/job_post_tl.sh" | awk '{print $4}'
 )
-echo "[INFO] pretrain job id: $PRETRAIN_JOBID"
+echo "[INFO] part3 post-TL job id: $PART3_POST_TL_JOBID"
 
-FINETUNE_CV_JOBID=$(
-    sbatch --dependency=afterok:"$PRETRAIN_JOBID" job.sh configs/finetune_cv.yaml | awk '{print $4}'
-)
-echo "[INFO] finetune_cv job id: $FINETUNE_CV_JOBID"
-
-FINETUNE_FINAL_JOBID=$(
-    sbatch --dependency=afterok:"$FINETUNE_CV_JOBID" job.sh configs/finetune_final.yaml | awk '{print $4}'
-)
-echo "[INFO] finetune_final job id: $FINETUNE_FINAL_JOBID"
-
-
-
-
-
-
-
-# ========= Model A input: extract latent vectors =========
-EXTRACT_CMD=$(cat <<'EOF'
-set -euo pipefail
-CONDA_BASE="$(conda info --base)"
-source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate env_214
-cd "'"$CODE_DIR"'"
-python extract_part3_latent_vectors.py \
-  configs/finetune_final.yaml \
-  results/transfer_learning/modified/finetune/final/final-epoch=004-v2.ckpt \
-  results/part3_latent_vectors.npz
-EOF
-)
-
-EXTRACT_JOBID=$(
-    sbatch --dependency=afterok:"$FINETUNE_FINAL_JOBID" \
-    --job-name=extract_latent \
-    --output=results/slurm-extract-latent-%j.out \
-    --wrap "$EXTRACT_CMD" | awk '{print $4}'
-)
-echo "[INFO] extract_part3_latent_vectors job id: $EXTRACT_JOBID"
-
-
-
-
-
-
-
-
-# ========= ModelA : random forest =========
-RF_CMD=$(cat <<'EOF'
-set -euo pipefail
-CONDA_BASE="$(conda info --base)"
-source "$CONDA_BASE/etc/profile.d/conda.sh"
-conda activate env_214
-cd "'"$CODE_DIR"'"
-python random_forest/part3_random_forest.py \
-  --ae-features results/part3_latent_vectors.npz \
-  --labeled-paths \
-    ../data/O012791.npz \
-    ../data/O013257.npz \
-    ../data/O013490.npz \
-  --outdir results/part3_random_forest \
-  --random-state 42
-EOF
-)
-
+# ========= Model A : Random Forest  =========
+echo "[INFO] Submitting random forest jobs..."
 RF_JOBID=$(
-    sbatch --dependency=afterok:"$EXTRACT_JOBID" \
-    --job-name=part3_rf \
-    --output=results/slurm-part3-rf-%j.out \
-    --wrap "$RF_CMD" | awk '{print $4}'
+    sbatch --dependency=afterok:"$FINETUNE_FINAL_MOD_JOBID" random_forest/job_rf.sh | awk '{print $4}'
 )
 echo "[INFO] random forest job id: $RF_JOBID"
 
-echo "[INFO] Pipeline submitted successfully."
-echo "[INFO] Job chain:"
-echo "        pretrain        : $PRETRAIN_JOBID"
-echo "        finetune_cv     : $FINETUNE_CV_JOBID"
-echo "        finetune_final  : $FINETUNE_FINAL_JOBID"
-echo "        extract_latent  : $EXTRACT_JOBID"
-echo "        random_forest   : $RF_JOBID"
+# ========= Model B : LDA =========
+echo "[INFO] Submitting LDA job..."
+LDA_JOBID=$(
+    sbatch --dependency=afterok:"$FINETUNE_FINAL_MOD_JOBID" "$CODE_DIR/LDA_model/job_lda.sh" | awk '{print $4}'
+)
+echo "[INFO] LDA job id: $LDA_JOBID"
+
+# ========= Model C : Logistic Regression (after post-TL embeddings exist) =========
+echo "[INFO] Submitting Part 3 post-LR job (logistic_experiments + compare)..."
+PART3_POST_LR_JOBID=$(
+    sbatch --dependency=afterok:"$PART3_POST_TL_JOBID" \
+        "$CODE_DIR/logistic_regression/job_lr.sh" | awk '{print $4}'
+)
+echo "[INFO] part3 post-LR job id: $PART3_POST_LR_JOBID"
+
+echo "[INFO] Run LightGBM model..."
+python lightgbm_mod.py
+
+echo "[INFO] Deactivating environment: $ENV_NAME"
+conda deactivate

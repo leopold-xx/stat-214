@@ -10,11 +10,13 @@ dependencies:
       - matplotlib
       - seaborn
       - scikit-learn
+      - scipy
       - jupyterlab
       - torch
       - torchvision
       - torchaudio
       - lightning
+      - lightgbm
       - pyyaml
       - wandb
       - tqdm

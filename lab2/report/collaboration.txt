@@ -3,16 +3,19 @@ We have all agreed on these attributions:
 Sixian Liu worked on:
 - Part A of transfer learning, including data preprocessing, pretraining, cross-validated fine-tuning, and final fine-tuning
 - Part A of the modeling section, specifically the Random Forest model
+- Conclusion of report
 
-____ worked on:
--
--
+Victoria Karai worked on:
+- Introduction of report
+- Exploratory data analysis
+- Part D of the modeling section, specifically the LightGBM model 
 
-____ worked on:
--
--
+Ruoyang Li worked on:
+- Feature Engineering Part 1: finding informative predictors
+- Feature Engineering Part 2: create new features
+- Modeling: LDA model and the analysis
 
-____ worked on:
--
--
-
+Chenfei Peng worked on:
+- Part B of transfer learning (embedding export, probes, visualizations, baseline vs modified comparison)
+- Part B of modeling: logistic regression (Leave-One-Image-Out; raw / latent / combined features) and related analysis
+- Reproducibility: results paths, Slurm post-job scripts, README design
