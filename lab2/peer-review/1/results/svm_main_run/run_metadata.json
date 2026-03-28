@@ -1,0 +1,37 @@
+{
+  "best_model_params": {
+    "C": 0.1,
+    "break_ties": false,
+    "cache_size": 200,
+    "class_weight": {
+      "0": 1,
+      "1": 2
+    },
+    "coef0": 0.0,
+    "decision_function_shape": "ovr",
+    "degree": 3,
+    "gamma": 0.1,
+    "kernel": "rbf",
+    "max_iter": -1,
+    "probability": true,
+    "random_state": 42,
+    "shrinking": true,
+    "tol": 0.001,
+    "verbose": false
+  },
+  "best_model_threshold": -1.3061927694189417,
+  "best_model_score": 0.8414410847726036,
+  "data_params": {
+    "scaler_type": "standard",
+    "remove_outliers": false,
+    "outlier_threshold": 3.0
+  },
+  "feature_selection_used": true,
+  "feature_selection_params": {
+    "high_corr_threshold": 0.95,
+    "variance_threshold": 1e-05,
+    "mutual_info_top_k": 40,
+    "rf_top_k": 25,
+    "vif_top_k": 5
+  }
+}

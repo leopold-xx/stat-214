@@ -1,0 +1,36 @@
+{
+  "best_model_params": {
+    "C": 0.01,
+    "class_weight": {
+      "0": 1,
+      "1": 2
+    },
+    "dual": false,
+    "fit_intercept": true,
+    "intercept_scaling": 1,
+    "l1_ratio": 0.5,
+    "max_iter": 1000,
+    "n_jobs": null,
+    "penalty": "elasticnet",
+    "random_state": null,
+    "solver": "saga",
+    "tol": 0.0001,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "best_model_threshold": 0.2,
+  "best_model_score": 0.6577463500868664,
+  "data_params": {
+    "scaler_type": "standard",
+    "remove_outliers": false,
+    "outlier_threshold": 3.0
+  },
+  "feature_selection_used": true,
+  "feature_selection_params": {
+    "high_corr_threshold": 0.95,
+    "variance_threshold": 1e-05,
+    "mutual_info_top_k": 40,
+    "rf_top_k": 25,
+    "vif_top_k": 5
+  }
+}
